@@ -26,9 +26,9 @@ jobs:
 
       - name: Generate a new version tag
         run: |
-          yarn run release
           git config --global user.name "Demomaker"
           git config --global user.email "mike01bedard@gmail.com"
+          yarn run release
           git push --follow-tags
 
       - name: Create a GitHub release
