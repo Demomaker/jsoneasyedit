@@ -44,13 +44,19 @@ const createWindow = () => {
       properties: ['showHiddenFiles'],
       filters: [{ name: 'JSON Files', extensions: ['json']}]
     });
-    if (result.canceled) return;
+    if (result.canceled) return false;
     electronVariables.currentOpenedFilePath = result.filePath;
+    return true;
   });
 
   // Listen for a request to save the edited JSON data
   ipcMain.handle('saveJson', async (event, jsonData) => {
-    fs.writeFileSync(electronVariables.currentOpenedFilePath, JSON.stringify(jsonData, null, 2), 'utf-8');
+    try {
+      fs.writeFileSync(electronVariables.currentOpenedFilePath, JSON.stringify(jsonData, null, 2), 'utf-8');
+      return true;
+    } catch (e) {
+      return false;
+    }
   });
 };
 

@@ -3,22 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JSON Editor</title>
+  <title>JSON Easy Editor</title>
+  <link rel="stylesheet" href="index.css">
 </head>
 <body>
-  <button id="openFileButton">Open JSON File</button>
-  <form id="jsonForm" style="display: none;"></form>
-  <button id="saveButton" style="display: none;">Save</button>
-  <button id="saveAsButton" style="display: none;">Save As</button>
+  <div class="container">
+    <header>
+      <h1>JSON Easy Editor</h1>
+    </header>
+    <div class="button-container">
+      <button id="openFileButton" class="btn">Open JSON File</button>
+      <button id="saveButton" class="btn" style="display: none;">Save</button>
+      <button id="saveAsButton" class="btn" style="display: none;">Save As</button>
+    </div>
+    <div id="breadcrumbs" class="breadcrumbs"></div>
+    <form id="jsonForm" style="display: none;" class="json-form"></form>
+  </div>
 
   <script>
+    // Store the JSON data globally so it's accessible across functions
+    let rootJsonData = null;
+    let currentFilePath = null;
+    let breadcrumbs = [];
+
     document.getElementById('openFileButton').addEventListener('click', async () => {
       const jsonData = await window.electron.openFile();
 
       if (jsonData) {
-        const parsedData = JSON.parse(jsonData);
-        console.log(jsonData);
-        generateForm(parsedData);
+        rootJsonData = JSON.parse(jsonData);
+        breadcrumbs = [];
+        generateForm(rootJsonData);
         document.getElementById('jsonForm').style.display = 'block';
         document.getElementById('saveButton').style.display = 'inline-block';
         document.getElementById('saveAsButton').style.display = "inline-block";
@@ -27,49 +41,356 @@
 
     document.getElementById('saveButton').addEventListener('click', async () => {
       const jsonData = collectFormData();
-      await window.electron.saveJson(jsonData);
-      alert('File saved!');
+      const saveSuccessful = await window.electron.saveJson(jsonData);
+      alert(saveSuccessful ? 'File saved!' : 'Failed to save!');
     });
 
     document.getElementById('saveAsButton').addEventListener('click', async () => {
       const jsonData = collectFormData();
-      await window.electron.changeFilePath();
-      await window.electron.saveJson(jsonData);
-      alert('File saved!');
-    })
+      const changedFilePath = await window.electron.changeFilePath();
+      if(!changedFilePath) {
+        return;
+      }
+      const saveSuccessful = await window.electron.saveJson(jsonData);
+      alert(saveSuccessful ? 'File saved!' : 'Failed to save!');
+    });
 
     // Function to generate form elements based on JSON structure
-    function generateForm(jsonData) {
+    function generateForm(jsonData, parentPath = '') {
       const form = document.getElementById('jsonForm');
       form.innerHTML = ''; // Clear the form
 
+      updateBreadcrumbs();
+
+      // Create form elements for current level
+      createFormElements(jsonData, form, parentPath);
+    }
+
+    function createFormElements(jsonData, container, parentPath) {
       Object.keys(jsonData).forEach(key => {
+        const value = jsonData[key];
+        const fullPath = parentPath ? `${parentPath}.${key}` : key;
+
+        const row = document.createElement('div');
+        row.classList.add('form-row');
+
         const label = document.createElement('label');
         label.textContent = key;
+        row.appendChild(label);
 
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.value = jsonData[key];
-        input.id = key;
+        // Handle different types of values
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          // Handle objects - create expand/collapse button
+          const expandBtn = document.createElement('button');
+          expandBtn.type = 'button'; // Prevent form submission
+          expandBtn.classList.add('expand-btn');
+          expandBtn.textContent = 'Expand';
+          expandBtn.setAttribute('data-path', fullPath);
+          expandBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            navigateToPath(fullPath);
+          });
+          row.appendChild(expandBtn);
+        }
+        else if (Array.isArray(value)) {
+          // Handle arrays
+          const arrayContainer = document.createElement('div');
+          arrayContainer.classList.add('array-container');
 
-        form.appendChild(label);
-        form.appendChild(input);
-        form.appendChild(document.createElement('br'));
+          // Create a label to show array length
+          const arrayLabel = document.createElement('div');
+          arrayLabel.textContent = `Array (${value.length} items)`;
+          arrayLabel.classList.add('array-label');
+          arrayContainer.appendChild(arrayLabel);
+
+          // Create array items with proper editing controls
+          value.forEach((item, index) => {
+            const itemDiv = document.createElement('div');
+            itemDiv.classList.add('array-item');
+
+            // Handle array items based on their type
+            if (typeof item === 'object' && item !== null) {
+              // For object items in array
+              const objectBtn = document.createElement('button');
+              objectBtn.type = 'button';
+              objectBtn.textContent = 'Edit Object';
+              objectBtn.classList.add('edit-object-btn');
+              objectBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                // Navigate to this specific array item
+                navigateToPath(`${fullPath}[${index}]`);
+              });
+              itemDiv.appendChild(objectBtn);
+            } else {
+              // For primitive values in array
+              const arrayInput = document.createElement('input');
+              arrayInput.type = typeof item === 'boolean' ? 'checkbox' : 'text';
+
+              if (typeof item === 'boolean') {
+                arrayInput.checked = item;
+              } else {
+                arrayInput.value = item !== null ? item : '';
+              }
+
+              arrayInput.setAttribute('data-path', `${fullPath}[${index}]`);
+              arrayInput.classList.add('array-input');
+              arrayInput.addEventListener('change', () => {
+                // Update the array item when input changes
+                const path = `${fullPath}[${index}]`;
+                let currentValue;
+
+                if (arrayInput.type === 'checkbox') {
+                  currentValue = arrayInput.checked;
+                } else {
+                  // Try to parse as JSON if possible, otherwise keep as string
+                  try {
+                    currentValue = JSON.parse(arrayInput.value);
+                  } catch (e) {
+                    currentValue = arrayInput.value;
+                  }
+                }
+
+                updateJsonValueByPath(path, currentValue);
+              });
+
+              itemDiv.appendChild(arrayInput);
+            }
+
+            // Add remove button for array item
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.textContent = 'Remove';
+            removeBtn.classList.add('remove-btn');
+            removeBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              // Remove item and regenerate the form
+              value.splice(index, 1);
+              generateForm(getValueByPath(parentPath || '.'), parentPath);
+            });
+
+            itemDiv.appendChild(removeBtn);
+            arrayContainer.appendChild(itemDiv);
+          });
+
+          // Add button to add new items to the array
+          const addBtn = document.createElement('button');
+          addBtn.type = 'button';
+          addBtn.textContent = 'Add Item';
+          addBtn.classList.add('add-btn');
+          addBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Add a new empty item based on the first item's type or empty string
+            const newItem = value.length > 0 ?
+              (typeof value[0] === 'object' && value[0] !== null ? {} : '') :
+              '';
+            value.push(newItem);
+            generateForm(getValueByPath(parentPath || '.'), parentPath);
+          });
+
+          arrayContainer.appendChild(addBtn);
+          row.appendChild(arrayContainer);
+        }
+        else {
+          // Handle primitive values (string, number, boolean)
+          const input = document.createElement('input');
+
+          if (typeof value === 'boolean') {
+            input.type = 'checkbox';
+            input.checked = value;
+          } else {
+            input.type = 'text';
+            input.value = value !== null ? value : '';
+          }
+
+          input.setAttribute('data-path', fullPath);
+          input.classList.add('form-input');
+
+          input.addEventListener('change', () => {
+            let newValue;
+
+            if (input.type === 'checkbox') {
+              newValue = input.checked;
+            } else {
+              // Try to parse numbers and booleans from strings
+              if (input.value === 'true') newValue = true;
+              else if (input.value === 'false') newValue = false;
+              else if (!isNaN(input.value) && input.value.trim() !== '') {
+                newValue = Number(input.value);
+              } else {
+                newValue = input.value;
+              }
+            }
+
+            updateJsonValueByPath(fullPath, newValue);
+          });
+
+          row.appendChild(input);
+        }
+
+        container.appendChild(row);
       });
     }
 
-    // Function to collect the data from the form
-    function collectFormData() {
-      const form = document.getElementById('jsonForm');
-      const jsonData = {};
+    // Update the breadcrumb navigation
+    function updateBreadcrumbs() {
+      const breadcrumbsContainer = document.getElementById('breadcrumbs');
+      breadcrumbsContainer.innerHTML = '';
 
-      Array.from(form.elements).forEach(element => {
-        if (element.id) {
-          jsonData[element.id] = element.value;
-        }
+      // Always add the root
+      const rootSpan = document.createElement('span');
+      rootSpan.textContent = 'Root';
+      rootSpan.classList.add('breadcrumb');
+      rootSpan.addEventListener('click', () => {
+        breadcrumbs = [];
+        generateForm(rootJsonData);
       });
+      breadcrumbsContainer.appendChild(rootSpan);
 
-      return jsonData;
+      // Add other breadcrumbs
+      if (breadcrumbs.length > 0) {
+        breadcrumbsContainer.appendChild(document.createTextNode(' > '));
+
+        breadcrumbs.forEach((crumb, index) => {
+          const span = document.createElement('span');
+          span.textContent = crumb;
+          span.classList.add('breadcrumb');
+
+          // Make breadcrumbs clickable to navigate
+          span.addEventListener('click', () => {
+            // Navigate to this breadcrumb level
+            const newPath = breadcrumbs.slice(0, index + 1).join('.');
+            navigateToPath(newPath);
+          });
+
+          breadcrumbsContainer.appendChild(span);
+
+          if (index < breadcrumbs.length - 1) {
+            breadcrumbsContainer.appendChild(document.createTextNode(' > '));
+          }
+        });
+      }
+    }
+
+    // Navigate to a specific path in the JSON
+    function navigateToPath(path) {
+      // Convert path to breadcrumbs array
+      if (path.includes('[')) {
+        // Handle array indices in path
+        breadcrumbs = [];
+        let segments = path.split('.');
+
+        segments.forEach(segment => {
+          if (segment.includes('[')) {
+            const baseName = segment.split('[')[0];
+            if (baseName) breadcrumbs.push(baseName);
+
+            // Extract array index
+            const indexMatch = segment.match(/\[(\d+)\]/);
+            if (indexMatch) breadcrumbs.push(`[${indexMatch[1]}]`);
+          } else {
+            breadcrumbs.push(segment);
+          }
+        });
+      } else {
+        breadcrumbs = path.split('.');
+      }
+
+      // Filter out empty segments
+      breadcrumbs = breadcrumbs.filter(crumb => crumb !== '');
+
+      // Get the JSON at this path and generate the form
+      const jsonAtPath = getValueByPath(path);
+      generateForm(jsonAtPath, path);
+    }
+
+    // Get value from JSON by path
+    function getValueByPath(path) {
+      if (!path || path === '.') return rootJsonData;
+
+      let current = rootJsonData;
+      const segments = path.split('.');
+
+      for (const segment of segments) {
+        if (segment === '') continue;
+
+        if (segment.includes('[')) {
+          // Handle array access
+          const baseName = segment.split('[')[0];
+          const indexMatch = segment.match(/\[(\d+)\]/);
+
+          if (baseName) current = current[baseName];
+
+          if (indexMatch) {
+            const index = parseInt(indexMatch[1], 10);
+            if (Array.isArray(current) && index < current.length) {
+              current = current[index];
+            } else {
+              return {}; // Return empty object if path is invalid
+            }
+          }
+        } else {
+          // Regular property access
+          if (current[segment] !== undefined) {
+            current = current[segment];
+          } else {
+            return {}; // Return empty object if path is invalid
+          }
+        }
+      }
+
+      return current;
+    }
+
+    // Update a value in the JSON by path
+    function updateJsonValueByPath(path, newValue) {
+      if (!path) return;
+
+      const segments = path.split('.');
+      let current = rootJsonData;
+
+      for (let i = 0; i < segments.length - 1; i++) {
+        const segment = segments[i];
+
+        if (segment.includes('[')) {
+          // Handle array access in path
+          const baseName = segment.split('[')[0];
+          if (baseName) current = current[baseName];
+
+          const indexMatch = segment.match(/\[(\d+)\]/);
+          if (indexMatch) {
+            const index = parseInt(indexMatch[1], 10);
+            current = current[index];
+          }
+        } else {
+          current = current[segment];
+        }
+      }
+
+      // Handle the last segment
+      const lastSegment = segments[segments.length - 1];
+
+      if (lastSegment.includes('[')) {
+        // Handle array access in the last segment
+        const baseName = lastSegment.split('[')[0];
+        const indexMatch = lastSegment.match(/\[(\d+)\]/);
+
+        if (indexMatch) {
+          const index = parseInt(indexMatch[1], 10);
+          if (baseName) {
+            current[baseName][index] = newValue;
+          } else {
+            current[index] = newValue;
+          }
+        }
+      } else {
+        current[lastSegment] = newValue;
+      }
+    }
+
+    // Function to collect all form data into a JSON object
+    function collectFormData() {
+      // Simply return the rootJsonData since we're updating it in real-time
+      return rootJsonData;
     }
   </script>
 </body>
