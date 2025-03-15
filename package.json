@@ -2,7 +2,7 @@
   "name": "jsoneasyedit",
   "productName": "jsoneasyedit",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "JSON Easy Editor",
   "main": "src/electron/index.js",
   "scripts": {
     "start": "electron-forge start",

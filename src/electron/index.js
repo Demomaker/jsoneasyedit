@@ -16,6 +16,7 @@ const createWindow = () => {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
+  mainWindow.removeMenu();
 
   const electronVariables = {
     currentOpenedFilePath: ''
@@ -25,7 +26,7 @@ const createWindow = () => {
   mainWindow.loadFile(path.join(__dirname, '../index.html'));
 
   // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  //mainWindow.webContents.openDevTools();
 
   // Listen for a request to open a JSON file
   ipcMain.handle('dialog:openFile', async () => {
