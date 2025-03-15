@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>JSON Easy Editor</title>
-  <link rel="stylesheet" href="index.css">
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <div class="container">
@@ -15,6 +15,7 @@
       <button id="openFileButton" class="btn">Open JSON File</button>
       <button id="saveButton" class="btn" style="display: none;">Save</button>
       <button id="saveAsButton" class="btn" style="display: none;">Save As</button>
+      <button id="exportButton" class="btn" style="display: none;">Export</button>
     </div>
     <div id="breadcrumbs" class="breadcrumbs"></div>
     <form id="jsonForm" style="display: none;" class="json-form"></form>
@@ -25,6 +26,67 @@
     let rootJsonData = null;
     let currentFilePath = null;
     let breadcrumbs = [];
+    let electronVariables = {
+      currentOpenedFilePath: ''
+    };
+    let isApp = true;
+
+    function exportJson(jsonData) {
+      try {
+        const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: "application/json" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "exportedFile.json";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    if (!window.electron) {
+    isApp = false;
+  window.electron = {
+    openFile: async () => {
+      return new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+
+        input.addEventListener('change', (event) => {
+          const file = event.target.files[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            try {
+              const jsonData = e.target.result;
+              rootJsonData = JSON.parse(jsonData);
+              resolve(jsonData);
+            } catch (err) {
+              alert("Invalid JSON file.");
+              resolve(null);
+            }
+          };
+          reader.readAsText(file);
+        });
+
+        input.click();
+      }); // ✅ Corrected: Added closing parenthesis here
+    },
+
+    changeFilePath: async () => {
+      return false;
+    },
+
+    saveJson: async (jsonData) => {
+      return false;
+    },
+  };
+}
+
 
     document.getElementById('openFileButton').addEventListener('click', async () => {
       const jsonData = await window.electron.openFile();
@@ -34,8 +96,13 @@
         breadcrumbs = [];
         generateForm(rootJsonData);
         document.getElementById('jsonForm').style.display = 'block';
-        document.getElementById('saveButton').style.display = 'inline-block';
-        document.getElementById('saveAsButton').style.display = "inline-block";
+
+        if(isApp) {
+          document.getElementById('saveButton').style.display = 'inline-block';
+          document.getElementById('saveAsButton').style.display = "inline-block";
+        } else {
+          document.getElementById('exportButton').style.display = "inline-block";
+        }
       }
     });
 
@@ -53,6 +120,11 @@
       }
       const saveSuccessful = await window.electron.saveJson(jsonData);
       alert(saveSuccessful ? 'File saved!' : 'Failed to save!');
+    });
+
+    document.getElementById('exportButton').addEventListener('click', async () => {
+      const jsonData = collectFormData();
+      const saveSuccessful = await exportJson(jsonData);
     });
 
     // Function to generate form elements based on JSON structure
