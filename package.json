@@ -9,7 +9,8 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "echo \"No linting configured\""
+    "lint": "echo \"No linting configured\"",
+    "release": "standard-version"
   },
   "keywords": [],
   "author": "demomaker",
@@ -27,6 +28,7 @@
     "@electron-forge/plugin-fuses": "^7.7.0",
     "@electron/fuses": "^1.8.0",
     "electron": "35.0.1",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "standard-version": "^9.5.0"
   }
 }
