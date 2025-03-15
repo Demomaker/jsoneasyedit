@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JSON Editor</title>
+</head>
+<body>
+  <button id="openFileButton">Open JSON File</button>
+  <form id="jsonForm" style="display: none;"></form>
+  <button id="saveButton" style="display: none;">Save</button>
+  <button id="saveAsButton" style="display: none;">Save As</button>
+
+  <script>
+    document.getElementById('openFileButton').addEventListener('click', async () => {
+      const jsonData = await window.electron.openFile();
+
+      if (jsonData) {
+        const parsedData = JSON.parse(jsonData);
+        console.log(jsonData);
+        generateForm(parsedData);
+        document.getElementById('jsonForm').style.display = 'block';
+        document.getElementById('saveButton').style.display = 'inline-block';
+        document.getElementById('saveAsButton').style.display = "inline-block";
+      }
+    });
+
+    document.getElementById('saveButton').addEventListener('click', async () => {
+      const jsonData = collectFormData();
+      await window.electron.saveJson(jsonData);
+      alert('File saved!');
+    });
+
+    document.getElementById('saveAsButton').addEventListener('click', async () => {
+      const jsonData = collectFormData();
+      await window.electron.changeFilePath();
+      await window.electron.saveJson(jsonData);
+      alert('File saved!');
+    })
+
+    // Function to generate form elements based on JSON structure
+    function generateForm(jsonData) {
+      const form = document.getElementById('jsonForm');
+      form.innerHTML = ''; // Clear the form
+
+      Object.keys(jsonData).forEach(key => {
+        const label = document.createElement('label');
+        label.textContent = key;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = jsonData[key];
+        input.id = key;
+
+        form.appendChild(label);
+        form.appendChild(input);
+        form.appendChild(document.createElement('br'));
+      });
+    }
+
+    // Function to collect the data from the form
+    function collectFormData() {
+      const form = document.getElementById('jsonForm');
+      const jsonData = {};
+
+      Array.from(form.elements).forEach(element => {
+        if (element.id) {
+          jsonData[element.id] = element.value;
+        }
+      });
+
+      return jsonData;
+    }
+  </script>
+</body>
+</html>
