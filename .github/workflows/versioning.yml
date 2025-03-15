@@ -1,0 +1,39 @@
+name: Release Automation
+
+on:
+  push:
+    branches:
+      - main   # Trigger this on pushes to the main branch
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Generate a new version tag
+        run: |
+          yarn run release
+          git config --global user.name "Demomaker"
+          git config --global user.email "mike01bedard@gmail.com"
+          git push --follow-tags
+
+      - name: Create a GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/**/*   # Specify the path to your release files (e.g., dmg, zip)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
