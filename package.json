@@ -1,7 +1,7 @@
 {
   "name": "jsoneasyedit",
   "productName": "jsoneasyedit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "JSON Easy Editor",
   "main": "src/electron/index.js",
   "scripts": {
